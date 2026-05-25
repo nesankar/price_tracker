@@ -18,5 +18,5 @@ dist/
 build/
 .venv/
 
-CLAUDE.MD
-context.MD
+CLAUDE.md
+context.md
