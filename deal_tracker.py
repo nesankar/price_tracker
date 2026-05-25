@@ -14,7 +14,6 @@ import xml.etree.ElementTree as ET
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Optional
@@ -35,8 +34,14 @@ _UA = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 DEAL_FEEDS = [
-    ("Slickdeals", "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q={q}&rss=1"),
-    ("Reddit /r/deals", "https://www.reddit.com/r/deals/search.rss?q={q}&sort=new&restrict_sr=1&t=week"),
+    (
+        "Slickdeals",
+        "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q={q}&rss=1",
+    ),
+    (
+        "Reddit /r/deals",
+        "https://www.reddit.com/r/deals/search.rss?q={q}&sort=new&restrict_sr=1&t=week",
+    ),
 ]
 
 logging.basicConfig(
@@ -46,6 +51,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------------------------------
 # Data models
 # ---------------------------------------------------------------------------
@@ -53,8 +59,8 @@ log = logging.getLogger(__name__)
 class Item:
     name: str
     target_price: float
-    keywords: str = ""   # search terms; defaults to name if blank
-    url: str = ""        # optional direct URL to also monitor
+    keywords: str = ""  # search terms; defaults to name if blank
+    url: str = ""  # optional direct URL to also monitor
     selector: str = ""
     id: Optional[int] = None
 
@@ -135,8 +141,13 @@ def seed_from_json(conn: sqlite3.Connection, path: Path = ITEMS_PATH) -> None:
                  target_price=excluded.target_price,
                  selector=excluded.selector,
                  keywords=excluded.keywords""",
-            (it["name"], it.get("url", ""), float(it["target_price"]),
-             it.get("selector", ""), it.get("keywords", "")),
+            (
+                it["name"],
+                it.get("url", ""),
+                float(it["target_price"]),
+                it.get("selector", ""),
+                it.get("keywords", ""),
+            ),
         )
     conn.commit()
 
@@ -145,8 +156,17 @@ def get_items(conn: sqlite3.Connection) -> list[Item]:
     rows = conn.execute(
         "SELECT id, name, url, target_price, selector, keywords FROM items ORDER BY id"
     ).fetchall()
-    return [Item(id=r[0], name=r[1], url=r[2], target_price=r[3],
-                 selector=r[4], keywords=r[5]) for r in rows]
+    return [
+        Item(
+            id=r[0],
+            name=r[1],
+            url=r[2],
+            target_price=r[3],
+            selector=r[4],
+            keywords=r[5],
+        )
+        for r in rows
+    ]
 
 
 def save_price(conn: sqlite3.Connection, item_id: int, price: float) -> None:
@@ -159,10 +179,13 @@ def save_price(conn: sqlite3.Connection, item_id: int, price: float) -> None:
 
 def price_stats(conn: sqlite3.Connection, item_id: int, days: int = 30) -> dict:
     since = (datetime.now() - timedelta(days=days)).isoformat()
-    recent = [r[0] for r in conn.execute(
-        "SELECT price FROM prices WHERE item_id=? AND ts>=? ORDER BY ts",
-        (item_id, since),
-    )]
+    recent = [
+        r[0]
+        for r in conn.execute(
+            "SELECT price FROM prices WHERE item_id=? AND ts>=? ORDER BY ts",
+            (item_id, since),
+        )
+    ]
     all_time = conn.execute(
         "SELECT MIN(price), MAX(price), COUNT(*) FROM prices WHERE item_id=?",
         (item_id,),
@@ -177,7 +200,10 @@ def price_stats(conn: sqlite3.Connection, item_id: int, days: int = 30) -> dict:
 
 
 def is_new_deal(conn: sqlite3.Connection, link: str) -> bool:
-    return conn.execute("SELECT 1 FROM seen_deals WHERE link=?", (link,)).fetchone() is None
+    return (
+        conn.execute("SELECT 1 FROM seen_deals WHERE link=?", (link,)).fetchone()
+        is None
+    )
 
 
 def mark_seen(conn: sqlite3.Connection, link: str, item_id: int) -> None:
@@ -218,12 +244,14 @@ def _parse_rss(source: str, xml_text: str) -> list[WebDeal]:
         link = (item.findtext("link") or "").strip()
         desc = (item.findtext("description") or "").strip()
         if title and link:
-            deals.append(WebDeal(
-                source=source,
-                title=title,
-                link=link,
-                price=_extract_price(title + " " + desc),
-            ))
+            deals.append(
+                WebDeal(
+                    source=source,
+                    title=title,
+                    link=link,
+                    price=_extract_price(title + " " + desc),
+                )
+            )
 
     # Atom <entry> elements (Reddit uses Atom)
     for entry in root.findall(".//atom:entry", ns):
@@ -231,12 +259,14 @@ def _parse_rss(source: str, xml_text: str) -> list[WebDeal]:
         link_el = entry.find("atom:link", ns)
         link = (link_el.get("href") if link_el is not None else "").strip()
         if title and link:
-            deals.append(WebDeal(
-                source=source,
-                title=title,
-                link=link,
-                price=_extract_price(title),
-            ))
+            deals.append(
+                WebDeal(
+                    source=source,
+                    title=title,
+                    link=link,
+                    price=_extract_price(title),
+                )
+            )
 
     return deals
 
@@ -244,7 +274,7 @@ def _parse_rss(source: str, xml_text: str) -> list[WebDeal]:
 def _extract_price(text: str) -> Optional[float]:
     """Find the lowest plausible price mentioned in deal text (sale price < original)."""
     prices = []
-    for m in re.finditer(r'\$[\d,]+\.?\d{0,2}', text):
+    for m in re.finditer(r"\$[\d,]+\.?\d{0,2}", text):
         p = _parse_price(m.group())
         if p and 0.50 < p < 10_000:
             prices.append(p)
@@ -326,10 +356,16 @@ def _schema_price(data) -> Optional[float]:
 
 
 def _heuristic_price(soup: BeautifulSoup) -> Optional[float]:
-    price_re = re.compile(r'\$[\d,]+\.?\d{0,2}')
+    price_re = re.compile(r"\$[\d,]+\.?\d{0,2}")
     candidates: list[float] = []
-    for sel in ('[class*="price"]', '[id*="price"]', '[itemprop="price"]',
-                '[class*="sale"]', '[class*="cost"]', '[data-price]'):
+    for sel in (
+        '[class*="price"]',
+        '[id*="price"]',
+        '[itemprop="price"]',
+        '[class*="sale"]',
+        '[class*="cost"]',
+        "[data-price]",
+    ):
         for el in soup.select(sel)[:8]:
             for m in price_re.finditer(el.get_text()):
                 p = _parse_price(m.group())
@@ -339,7 +375,7 @@ def _heuristic_price(soup: BeautifulSoup) -> Optional[float]:
 
 
 def _parse_price(text: str) -> Optional[float]:
-    cleaned = re.sub(r'[^\d.]', '', text.replace(',', ''))
+    cleaned = re.sub(r"[^\d.]", "", text.replace(",", ""))
     try:
         v = float(cleaned)
         return v if v > 0 else None
@@ -356,7 +392,9 @@ def score_deal(item: Item, price: float, stats: dict) -> Optional[PriceAlert]:
 
     if price <= item.target_price:
         pct = (item.target_price - price) / item.target_price
-        reasons.append(f"${price:.2f} hits target ${item.target_price:.2f} ({pct:.0%} below)")
+        reasons.append(
+            f"${price:.2f} hits target ${item.target_price:.2f} ({pct:.0%} below)"
+        )
         scores.append(min(1.0, 0.4 + pct * 1.5))
 
     if stats["avg"] and stats["total_checks"] >= 3:
@@ -365,7 +403,11 @@ def score_deal(item: Item, price: float, stats: dict) -> Optional[PriceAlert]:
             reasons.append(f"{pct:.0%} below 30-day avg ${stats['avg']:.2f}")
             scores.append(min(1.0, pct * 3))
 
-    if stats["min_all_time"] and stats["total_checks"] >= 5 and price < stats["min_all_time"]:
+    if (
+        stats["min_all_time"]
+        and stats["total_checks"] >= 5
+        and price < stats["min_all_time"]
+    ):
         reasons.append(f"All-time low! Previous best: ${stats['min_all_time']:.2f}")
         scores.append(1.0)
 
@@ -377,7 +419,9 @@ def score_deal(item: Item, price: float, stats: dict) -> Optional[PriceAlert]:
 # ---------------------------------------------------------------------------
 # Main check loop
 # ---------------------------------------------------------------------------
-def check_all(conn: sqlite3.Connection) -> tuple[list[PriceAlert], list[tuple[Item, WebDeal]]]:
+def check_all(
+    conn: sqlite3.Connection,
+) -> tuple[list[PriceAlert], list[tuple[Item, WebDeal]]]:
     items = get_items(conn)
     if not items:
         log.warning("No items configured — add some via 'add' or items.json")
@@ -413,8 +457,12 @@ def check_all(conn: sqlite3.Connection) -> tuple[list[PriceAlert], list[tuple[It
                 mark_seen(conn, deal.link, item.id)  # seen but not worth alerting
                 continue
             mark_seen(conn, deal.link, item.id)
-            log.info("  NEW DEAL [%s] %s%s", deal.source, deal.title[:60],
-                     f" (${deal.price:.2f})" if deal.price else "")
+            log.info(
+                "  NEW DEAL [%s] %s%s",
+                deal.source,
+                deal.title[:60],
+                f" (${deal.price:.2f})" if deal.price else "",
+            )
             new_web_deals.append((item, deal))
 
     notify(price_alerts, new_web_deals)
@@ -424,7 +472,9 @@ def check_all(conn: sqlite3.Connection) -> tuple[list[PriceAlert], list[tuple[It
 # ---------------------------------------------------------------------------
 # Notifications
 # ---------------------------------------------------------------------------
-def notify(price_alerts: list[PriceAlert], web_deals: list[tuple[Item, WebDeal]]) -> None:
+def notify(
+    price_alerts: list[PriceAlert], web_deals: list[tuple[Item, WebDeal]]
+) -> None:
     host = os.getenv("SMTP_HOST")
     if not host or (not price_alerts and not web_deals):
         return
@@ -498,8 +548,12 @@ def cmd_list(args, conn: sqlite3.Connection) -> None:
     print("─" * 84)
     for it in items:
         url_str = it.url[:30] + "…" if len(it.url) > 30 else it.url
-        kw_str = it.search_terms[:22] + "…" if len(it.search_terms) > 22 else it.search_terms
-        print(f"{it.id:>4}  {it.name:<28}  ${it.target_price:>7.2f}  {kw_str:<24}  {url_str}")
+        kw_str = (
+            it.search_terms[:22] + "…" if len(it.search_terms) > 22 else it.search_terms
+        )
+        print(
+            f"{it.id:>4}  {it.name:<28}  ${it.target_price:>7.2f}  {kw_str:<24}  {url_str}"
+        )
 
 
 def cmd_history(args, conn: sqlite3.Connection) -> None:
@@ -527,7 +581,13 @@ def cmd_history(args, conn: sqlite3.Connection) -> None:
 def cmd_add(args, conn: sqlite3.Connection) -> None:
     conn.execute(
         "INSERT OR IGNORE INTO items (name, url, target_price, selector, keywords) VALUES (?,?,?,?,?)",
-        (args.name, args.url or "", args.target_price, args.selector or "", args.keywords or ""),
+        (
+            args.name,
+            args.url or "",
+            args.target_price,
+            args.selector or "",
+            args.keywords or "",
+        ),
     )
     conn.commit()
     print(f"Added: {args.name}  target=${args.target_price:.2f}")
@@ -545,7 +605,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Price tracker with web deal hunting")
     sub = p.add_subparsers(dest="cmd")
 
-    sub.add_parser("run",  help="Hunt for deals and check URLs (run via cron)")
+    sub.add_parser("run", help="Hunt for deals and check URLs (run via cron)")
     sub.add_parser("list", help="List tracked items")
 
     ph = sub.add_parser("history", help="Show stats for an item")
@@ -555,8 +615,10 @@ def main() -> None:
     pa.add_argument("name", help="Display name")
     pa.add_argument("target_price", type=float, help="Alert threshold ($)")
     pa.add_argument("--keywords", default="", help="Search terms (default: name)")
-    pa.add_argument("--url",      default="", help="Direct product URL to also monitor")
-    pa.add_argument("--selector", default="", help="CSS selector for URL price (optional)")
+    pa.add_argument("--url", default="", help="Direct product URL to also monitor")
+    pa.add_argument(
+        "--selector", default="", help="CSS selector for URL price (optional)"
+    )
 
     pr = sub.add_parser("remove", help="Remove an item")
     pr.add_argument("id", type=int)
@@ -566,11 +628,11 @@ def main() -> None:
     seed_from_json(conn)
 
     dispatch = {
-        "run":     cmd_run,
-        "list":    cmd_list,
+        "run": cmd_run,
+        "list": cmd_list,
         "history": cmd_history,
-        "add":     cmd_add,
-        "remove":  cmd_remove,
+        "add": cmd_add,
+        "remove": cmd_remove,
     }
     if args.cmd in dispatch:
         dispatch[args.cmd](args, conn)
