@@ -1,0 +1,14 @@
+[
+  {
+    "name": "Sony WH-1000XM5",
+    "target_price": 250.00,
+    "keywords": "sony wh-1000xm5 headphones"
+  },
+  {
+    "name": "iPad Air",
+    "target_price": 499.00,
+    "keywords": "ipad air m2",
+    "url": "https://www.bestbuy.com/...",
+    "selector": ""
+  }
+]
